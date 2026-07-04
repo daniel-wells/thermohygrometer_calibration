@@ -166,16 +166,14 @@ def simulate_measurements(
     line_ids = layout["line"].astype(int).to_numpy()
     line_temp_effects = {line: rng.normal(0.0, 0.08) for line in np.unique(line_ids)}
     line_humidity_effects = {line: rng.normal(0.0, 0.45) for line in np.unique(line_ids)}
+    line_temp_offsets = np.array([line_temp_effects[line] for line in line_ids])
+    line_humidity_offsets = np.array([line_humidity_effects[line] for line in line_ids])
 
     temp_device_re = rng.normal(0.0, 0.10, size=n_devices)
     humidity_device_re = rng.normal(0.0, 0.70, size=n_devices)
 
-    temp_bias0 = type_temp_mu + np.array([line_temp_effects[line] for line in line_ids]) + temp_device_re
-    humidity_bias0 = (
-        type_humidity_mu
-        + np.array([line_humidity_effects[line] for line in line_ids])
-        + humidity_device_re
-    )
+    temp_bias0 = type_temp_mu + temp_device_re
+    humidity_bias0 = type_humidity_mu + humidity_device_re
 
     temp_corr = _correlation_kernel(layout, rho=1.8, line_strength=0.25, nugget=0.20)
     humidity_corr = _correlation_kernel(layout, rho=1.3, line_strength=0.30, nugget=0.25)
@@ -191,12 +189,14 @@ def simulate_measurements(
 
     observed_temp = (
         true_temp[:, None]
+        + line_temp_offsets[None, :]
         + temp_bias0[None, :]
         + temp_shared_noise
         + temp_ar
     )
     observed_humidity = (
         true_humidity[:, None]
+        + line_humidity_offsets[None, :]
         + humidity_bias0[None, :]
         + humidity_shared_noise
         + humidity_ar
@@ -225,8 +225,8 @@ def simulate_measurements(
     device_effects = layout[["device_id", "device_type", "line", "position"]].copy()
     device_effects["type_temp_effect"] = type_temp_mu
     device_effects["type_humidity_effect"] = type_humidity_mu
-    device_effects["line_temp_effect"] = [line_temp_effects[line] for line in line_ids]
-    device_effects["line_humidity_effect"] = [line_humidity_effects[line] for line in line_ids]
+    device_effects["line_temp_effect"] = line_temp_offsets
+    device_effects["line_humidity_effect"] = line_humidity_offsets
     device_effects["device_temp_random_effect"] = temp_device_re
     device_effects["device_humidity_random_effect"] = humidity_device_re
     device_effects["temp_bias0"] = temp_bias0
