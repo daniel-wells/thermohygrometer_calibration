@@ -59,7 +59,7 @@ Outputs:
 ## 4) Render report
 
 ```bash
-quarto render report.qmd
+quarto render index.qmd
 ```
 
 Output:
