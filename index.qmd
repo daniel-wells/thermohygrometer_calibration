@@ -1,0 +1,28 @@
+---
+title: "SwitchBot Thermo-Hygrometer Calibration"
+date: 2026-07-04
+format:
+  html:
+    toc: true
+    html-math-method: katex
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+## Temperature Over Time by Device
+
+![](results/figures/temperature_by_device.png)
+
+## Humidity Over Time by Device
+
+![](results/figures/humidity_by_device.png)
+
+## Mean Temperature Heatmap
+
+![](results/figures/temperature_heatmap.png)
+
+## Mean Humidity Heatmap
+
+![](results/figures/humidity_heatmap.png)

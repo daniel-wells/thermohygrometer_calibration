@@ -1,0 +1,25 @@
+[project]
+name = "thermohygrometer-calibration"
+version = "0.1.0"
+description = "Calibration workflow for multiple thermo-hygrometers"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "jupyter>=1.1.1",
+    "numpy>=2.1",
+    "pandas>=2.2",
+    "plotnine>=0.14.5",
+]
+
+[tool.uv]
+package = true
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
