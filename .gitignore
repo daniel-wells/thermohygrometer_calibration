@@ -16,6 +16,7 @@ index.html
 index_files/
 
 data/simulated/
+data/simulated_truth/
 data/processed/
 
 .DS_Store

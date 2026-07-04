@@ -29,6 +29,12 @@ def parse_args() -> argparse.Namespace:
         help="Directory for simulated outputs.",
     )
     parser.add_argument(
+        "--truth-output-dir",
+        type=Path,
+        default=Path("data/simulated_truth"),
+        help="Directory for latent/effect ground-truth outputs.",
+    )
+    parser.add_argument(
         "--start",
         type=str,
         default="2026-07-01 00:00:00",
@@ -142,18 +148,11 @@ def _simulate_ar1(n_times: int, n_devices: int, phi: float, innovation_sd: float
     return x
 
 
-def _simulate_bias_drift(n_times: int, n_devices: int, drift_sd: float, rng: np.random.Generator) -> np.ndarray:
-    drift = np.zeros((n_times, n_devices), dtype=float)
-    innovations = rng.normal(0.0, drift_sd, size=(n_times - 1, n_devices))
-    drift[1:] = np.cumsum(innovations, axis=0)
-    return drift
-
-
 def simulate_measurements(
     layout: pd.DataFrame,
     timestamps: pd.DatetimeIndex,
     seed: int,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
     rng = np.random.default_rng(seed)
     n_times = len(timestamps)
     n_devices = len(layout)
@@ -168,15 +167,15 @@ def simulate_measurements(
     line_temp_effects = {line: rng.normal(0.0, 0.08) for line in np.unique(line_ids)}
     line_humidity_effects = {line: rng.normal(0.0, 0.45) for line in np.unique(line_ids)}
 
-    temp_bias0 = type_temp_mu + np.array([line_temp_effects[line] for line in line_ids]) + rng.normal(0.0, 0.10, size=n_devices)
+    temp_device_re = rng.normal(0.0, 0.10, size=n_devices)
+    humidity_device_re = rng.normal(0.0, 0.70, size=n_devices)
+
+    temp_bias0 = type_temp_mu + np.array([line_temp_effects[line] for line in line_ids]) + temp_device_re
     humidity_bias0 = (
         type_humidity_mu
         + np.array([line_humidity_effects[line] for line in line_ids])
-        + rng.normal(0.0, 0.70, size=n_devices)
+        + humidity_device_re
     )
-
-    temp_bias_drift = _simulate_bias_drift(n_times, n_devices, drift_sd=0.002, rng=rng)
-    humidity_bias_drift = _simulate_bias_drift(n_times, n_devices, drift_sd=0.010, rng=rng)
 
     temp_corr = _correlation_kernel(layout, rho=1.8, line_strength=0.25, nugget=0.20)
     humidity_corr = _correlation_kernel(layout, rho=1.3, line_strength=0.30, nugget=0.25)
@@ -193,14 +192,12 @@ def simulate_measurements(
     observed_temp = (
         true_temp[:, None]
         + temp_bias0[None, :]
-        + temp_bias_drift
         + temp_shared_noise
         + temp_ar
     )
     observed_humidity = (
         true_humidity[:, None]
         + humidity_bias0[None, :]
-        + humidity_bias_drift
         + humidity_shared_noise
         + humidity_ar
     )
@@ -223,8 +220,41 @@ def simulate_measurements(
                 }
             )
 
-    out = pd.DataFrame(records)
-    return out.sort_values(["timestamp", "line", "position", "device_id"]).reset_index(drop=True)
+    out = pd.DataFrame(records).sort_values(["timestamp", "line", "position", "device_id"]).reset_index(drop=True)
+
+    device_effects = layout[["device_id", "device_type", "line", "position"]].copy()
+    device_effects["type_temp_effect"] = type_temp_mu
+    device_effects["type_humidity_effect"] = type_humidity_mu
+    device_effects["line_temp_effect"] = [line_temp_effects[line] for line in line_ids]
+    device_effects["line_humidity_effect"] = [line_humidity_effects[line] for line in line_ids]
+    device_effects["device_temp_random_effect"] = temp_device_re
+    device_effects["device_humidity_random_effect"] = humidity_device_re
+    device_effects["temp_bias0"] = temp_bias0
+    device_effects["humidity_bias0"] = humidity_bias0
+
+    type_effects = pd.DataFrame(
+        {
+            "device_type": ["ip65", "standard"],
+            "temp_effect": [0.12, -0.03],
+            "humidity_effect": [-1.10, 0.35],
+        }
+    )
+
+    line_effects = pd.DataFrame(
+        {
+            "line": sorted(line_temp_effects.keys()),
+            "line_temp_effect": [line_temp_effects[line] for line in sorted(line_temp_effects.keys())],
+            "line_humidity_effect": [line_humidity_effects[line] for line in sorted(line_humidity_effects.keys())],
+        }
+    )
+
+    truth_outputs = {
+        "device_effects": device_effects,
+        "type_effects": type_effects,
+        "line_effects": line_effects,
+    }
+
+    return out, truth_outputs
 
 
 def _saturation_vapor_pressure_kpa(temp_c: np.ndarray) -> np.ndarray:
@@ -279,6 +309,17 @@ def write_outputs(df: pd.DataFrame, output_dir: Path) -> None:
         export.to_csv(output_dir / f"{safe_name}_data.csv", index=False)
 
 
+def write_truth_outputs(truth: dict[str, pd.DataFrame], output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for old_csv in output_dir.glob("*.csv"):
+        old_csv.unlink()
+
+    truth["device_effects"].to_csv(output_dir / "device_effects.csv", index=False)
+    truth["type_effects"].to_csv(output_dir / "type_effects.csv", index=False)
+    truth["line_effects"].to_csv(output_dir / "line_effects.csv", index=False)
+
+
 def main() -> None:
     args = parse_args()
 
@@ -286,8 +327,9 @@ def main() -> None:
     layout = load_layout(args.layout, at_time=start)
     timestamps = pd.date_range(start=start, periods=args.periods, freq=args.freq)
 
-    df = simulate_measurements(layout=layout, timestamps=timestamps, seed=args.seed)
+    df, truth = simulate_measurements(layout=layout, timestamps=timestamps, seed=args.seed)
     write_outputs(df, output_dir=args.output_dir)
+    write_truth_outputs(truth, output_dir=args.truth_output_dir)
 
 
 if __name__ == "__main__":
