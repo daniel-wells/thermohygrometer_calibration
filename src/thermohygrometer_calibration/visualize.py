@@ -24,15 +24,22 @@ def parse_args() -> argparse.Namespace:
         description="Create simple per-device time-series plots using plotnine."
     )
     parser.add_argument(
+        "--dataset",
+        type=str,
+        choices=["actual", "simulated"],
+        default="actual",
+        help="Dataset label used for default input/output paths.",
+    )
+    parser.add_argument(
         "--input",
         type=Path,
-        default=Path("data/processed/measurements_long.csv"),
+        default=None,
         help="Processed long-format CSV from thermohygrometer_calibration.analyze.",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("results/figures"),
+        default=None,
         help="Directory to write generated figures.",
     )
     return parser.parse_args()
@@ -69,7 +76,6 @@ def _save_heatmap(
         + geom_tile(color="white", size=1)
         + geom_text(aes(label="label"), size=8, color="black")
         + scale_fill_gradient(low="#d0e8f5", high="#08306b", name=label)
-        + scale_y_reverse()
         + coord_equal()
         + theme_bw()
         + theme(figure_size=(6, 4))
@@ -129,7 +135,15 @@ def run(input_path: Path, output_dir: Path) -> None:
 
 def main() -> None:
     args = parse_args()
-    run(args.input, args.output_dir)
+    input_path = args.input
+    if input_path is None:
+        input_path = Path("data/processed") / args.dataset / "measurements_long.csv"
+
+    output_dir = args.output_dir
+    if output_dir is None:
+        output_dir = Path("results") / args.dataset / "figures"
+
+    run(input_path, output_dir)
 
 
 if __name__ == "__main__":

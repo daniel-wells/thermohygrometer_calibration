@@ -36,25 +36,38 @@ Output:
 
 ```bash
 uv run python -m thermohygrometer_calibration.analyze \
-  --input-dir data/simulated \
-  --output-dir data/processed
+  --dataset simulated
+```
+
+```bash
+uv run python -m thermohygrometer_calibration.analyze \
+  --dataset actual
 ```
 
 Outputs:
-- `data/processed/measurements_long.csv`
-- `data/processed/device_summary.csv`
+- `data/processed/simulated/measurements_long.csv`
+- `data/processed/simulated/device_summary.csv`
+- `data/processed/actual/measurements_long.csv`
+- `data/processed/actual/device_summary.csv`
+
 
 ## 3) Visualise
 
 ```bash
 uv run python -m thermohygrometer_calibration.visualize \
-  --input data/processed/measurements_long.csv \
-  --output-dir results/figures
+  --dataset simulated
+```
+
+```bash
+uv run python -m thermohygrometer_calibration.visualize \
+  --dataset actual
 ```
 
 Outputs:
-- `results/figures/temperature_by_device.png` (all devices on one plot)
-- `results/figures/humidity_by_device.png` (all devices on one plot)
+- `results/simulated/figures/temperature_by_device.png`
+- `results/simulated/figures/humidity_by_device.png`
+- `results/actual/figures/temperature_by_device.png`
+- `results/actual/figures/humidity_by_device.png`
 
 ## 4) Render report
 

@@ -17,9 +17,16 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument(
+        "--dataset",
+        type=str,
+        choices=["actual", "simulated"],
+        default="actual",
+        help="Dataset label used for default input/output paths.",
+    )
+    parser.add_argument(
         "--input-dir",
         type=Path,
-        default=Path("data/raw"),
+        default=None,
         help="Directory containing per-device SwitchBot export CSV files.",
     )
     parser.add_argument(
@@ -31,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("data/processed"),
+        default=None,
         help="Directory where processed outputs are written.",
     )
     return parser.parse_args()
@@ -139,7 +146,15 @@ def run(input_dir: Path, layout_path: Path, output_dir: Path) -> None:
 
 def main() -> None:
     args = parse_args()
-    run(args.input_dir, args.layout, args.output_dir)
+    input_dir = args.input_dir
+    if input_dir is None:
+        input_dir = Path("data/raw") if args.dataset == "actual" else Path("data/simulated")
+
+    output_dir = args.output_dir
+    if output_dir is None:
+        output_dir = Path("data/processed") / args.dataset
+
+    run(input_dir, args.layout, output_dir)
 
 
 if __name__ == "__main__":

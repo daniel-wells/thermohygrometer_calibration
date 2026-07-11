@@ -13,16 +13,16 @@ execute:
 
 ## Temperature Over Time by Device
 
-![](results/figures/temperature_by_device.png)
+![](results/actual/figures/temperature_by_device.png)
 
 ## Humidity Over Time by Device
 
-![](results/figures/humidity_by_device.png)
+![](results/actual/figures/humidity_by_device.png)
 
 ## Mean Temperature Heatmap
 
-![](results/figures/temperature_heatmap.png)
+![](results/actual/figures/temperature_heatmap.png)
 
 ## Mean Humidity Heatmap
 
-![](results/figures/humidity_heatmap.png)
+![](results/actual/figures/humidity_heatmap.png)
