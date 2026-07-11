@@ -35,7 +35,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--layout",
         type=Path,
-        default=Path("data/layout.csv"),
+        default=None,
         help="Layout config CSV with device_id, device_type, line, position, valid_from, valid_to.",
     )
     parser.add_argument(
@@ -166,7 +166,11 @@ def main() -> None:
     if output_dir is None:
         output_dir = Path("data/processed") / args.dataset
 
-    run(input_dir, args.layout, output_dir)
+    layout_path = args.layout
+    if layout_path is None:
+        layout_path = Path("data/layout_actual.csv") if args.dataset == "actual" else Path("data/layout_simulated.csv")
+
+    run(input_dir, layout_path, output_dir)
 
 
 if __name__ == "__main__":

@@ -17,10 +17,10 @@ UV_PROJECT_ENVIRONMENT=$HOME/.cache/uv/venvs/thermohygrometer_calibration
 
 ```bash
 uv run python -m thermohygrometer_calibration.simulate \
-  --layout data/layout.csv \
+  --layout data/layout_simulated.csv \
   --output-dir data/simulated \
   --truth-output-dir data/simulated_truth \
-  --start "2026-07-01 00:00:00" \
+  --start "2026-07-05 00:00:00" \
   --periods 672 \
   --freq 15min \
   --seed 42

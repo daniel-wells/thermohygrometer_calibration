@@ -11,6 +11,26 @@ execute:
   message: false
 ---
 
+# Simulated
+
+## Temperature Over Time by Device
+
+![](results/simulated/figures/temperature_by_device.png)
+
+## Humidity Over Time by Device
+
+![](results/simulated/figures/humidity_by_device.png)
+
+## Mean Temperature Heatmap
+
+![](results/simulated/figures/temperature_heatmap.png)
+
+## Mean Humidity Heatmap
+
+![](results/simulated/figures/humidity_heatmap.png)
+
+# Actual
+
 ## Temperature Over Time by Device
 
 ![](results/actual/figures/temperature_by_device.png)

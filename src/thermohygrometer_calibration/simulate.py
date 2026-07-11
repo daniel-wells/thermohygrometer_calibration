@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--layout",
         type=Path,
-        default=Path("data/layout.csv"),
+        default=Path("data/layout_simulated.csv"),
         help="CSV layout file with device_id, device_type, line, position.",
     )
     parser.add_argument(
@@ -37,7 +37,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--start",
         type=str,
-        default="2026-07-01 00:00:00",
+        default="2026-07-05 00:00:00",
         help="Start timestamp for simulation.",
     )
     parser.add_argument(
