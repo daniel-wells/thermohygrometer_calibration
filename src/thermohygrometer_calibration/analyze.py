@@ -7,6 +7,9 @@ import pandas as pd
 
 SWITCHBOT_REQUIRED_COLUMNS = {"Date", "Temperature_Celsius(℃)", "Relative_Humidity(%)"}
 LAYOUT_REQUIRED_COLUMNS = {"device_id", "device_type", "line", "position", "valid_from"}
+SOURCE_CUTOFFS = {
+    "Meter 4B 1_data.csv": pd.Timestamp("2026-07-04 11:45:00"),
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -70,6 +73,14 @@ def _read_switchbot_file(path: Path) -> pd.DataFrame:
     return out
 
 
+def _apply_source_cutoffs(df: pd.DataFrame) -> pd.DataFrame:
+    filtered = df.copy()
+    for source_file, cutoff in SOURCE_CUTOFFS.items():
+        keep_mask = (filtered["source_file"] != source_file) | (filtered["timestamp"] >= cutoff)
+        filtered = filtered[keep_mask]
+    return filtered
+
+
 def load_layout_config(layout_path: Path) -> pd.DataFrame:
     if not layout_path.exists():
         raise FileNotFoundError(f"Layout config not found: {layout_path}")
@@ -108,6 +119,7 @@ def load_switchbot_exports(input_dir: Path) -> pd.DataFrame:
 
     frames = [_read_switchbot_file(path) for path in files]
     df = pd.concat(frames, ignore_index=True)
+    df = _apply_source_cutoffs(df)
     if df.empty:
         raise ValueError("No valid rows found after parsing input files.")
 
