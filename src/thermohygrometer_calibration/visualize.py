@@ -47,8 +47,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def _build_device_color_map(df: pd.DataFrame) -> dict[str, str]:
-    indoor_palette = ["#2E8B57", "#20B2AA", "#1E90FF"]
-    outdoor_palette = ["#FF8C00", "#DC143C", "#FF69B4"]
+    indoor_palette = ["#A9D6FF", "#0B4FA8"]
+    outdoor_palette = ["#FFC3C3", "#B22222"]
 
     type_series = df.get("device_type")
     if type_series is None:
@@ -81,11 +81,11 @@ def _build_device_color_map(df: pd.DataFrame) -> dict[str, str]:
             unknown_devices.append(device_id)
 
     for idx, device_id in enumerate(sorted(indoor_devices)):
-        color_map[device_id] = indoor_palette[idx % len(indoor_palette)]
+        color_map[device_id] = _make_shades(indoor_palette[0], indoor_palette[1], len(indoor_devices))[idx]
     for idx, device_id in enumerate(sorted(outdoor_devices)):
-        color_map[device_id] = outdoor_palette[idx % len(outdoor_palette)]
+        color_map[device_id] = _make_shades(outdoor_palette[0], outdoor_palette[1], len(outdoor_devices))[idx]
     for idx, device_id in enumerate(sorted(unknown_devices)):
-        color_map[device_id] = indoor_palette[idx % len(indoor_palette)]
+        color_map[device_id] = _make_shades(indoor_palette[0], indoor_palette[1], len(unknown_devices))[idx]
 
     return color_map
 
