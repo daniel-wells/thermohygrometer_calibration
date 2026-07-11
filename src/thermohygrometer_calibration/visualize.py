@@ -7,6 +7,7 @@ import pandas as pd
 from plotnine import (
     aes,
     coord_equal,
+    facet_wrap,
     geom_line,
     geom_text,
     geom_tile,
@@ -14,7 +15,8 @@ from plotnine import (
     labs,
     scale_color_manual,
     scale_fill_gradient,
-    scale_y_reverse,
+    scale_x_continuous,
+    scale_y_continuous,
     theme,
     theme_bw,
 )
@@ -107,43 +109,38 @@ def _make_shades(start_hex: str, end_hex: str, n: int) -> list[str]:
     return [_interpolate_hex(start_hex, end_hex, i / (n - 1)) for i in range(n)]
 
 
-def _build_blue_red_split_map(df: pd.DataFrame, split_col: str) -> dict[str, str]:
-    first_pos = (
-        df[["device_id", split_col]]
-        .dropna(subset=["device_id", split_col])
-        .drop_duplicates(subset=["device_id"], keep="first")
+def _build_group_split_colors(
+    df: pd.DataFrame, split_col: str, label_prefix: str
+) -> tuple[pd.DataFrame, dict[str, str], str]:
+    out = df.copy()
+    color_col = f"{split_col}_group"
+    na_label = f"{label_prefix} NA"
+
+    levels = sorted(out[split_col].dropna().unique().tolist())
+    if not levels:
+        out[color_col] = na_label
+        return out, {na_label: "#808080"}, color_col
+
+    split_idx = max(1, len(levels) // 2)
+    blue_levels = levels[:split_idx]
+    red_levels = levels[split_idx:]
+
+    blue_labels = [f"{label_prefix} {int(level)}" for level in blue_levels]
+    red_labels = [f"{label_prefix} {int(level)}" for level in red_levels]
+    blue_shades = _make_shades("#A9D6FF", "#0B4FA8", max(1, len(blue_labels)))
+    red_shades = _make_shades("#FFC3C3", "#B22222", max(1, len(red_labels)))
+
+    color_map: dict[str, str] = {na_label: "#808080"}
+    for label, color in zip(blue_labels, blue_shades):
+        color_map[label] = color
+    for label, color in zip(red_labels, red_shades):
+        color_map[label] = color
+
+    out[color_col] = out[split_col].apply(
+        lambda value: f"{label_prefix} {int(value)}" if pd.notna(value) else na_label
     )
-    if first_pos.empty:
-        return _build_device_color_map(df)
 
-    sorted_levels = sorted(first_pos[split_col].unique().tolist())
-    split_idx = max(1, len(sorted_levels) // 2)
-    blue_levels = set(sorted_levels[:split_idx])
-
-    blue_devices = sorted(
-        first_pos[first_pos[split_col].isin(blue_levels)]["device_id"].astype(str).tolist()
-    )
-    red_devices = sorted(
-        first_pos[~first_pos[split_col].isin(blue_levels)]["device_id"].astype(str).tolist()
-    )
-
-    blue_shades = _make_shades("#A9D6FF", "#0B4FA8", len(blue_devices))
-    red_shades = _make_shades("#FFC3C3", "#B22222", len(red_devices))
-
-    color_map: dict[str, str] = {}
-    for device_id, color in zip(blue_devices, blue_shades):
-        color_map[device_id] = color
-    for device_id, color in zip(red_devices, red_shades):
-        color_map[device_id] = color
-
-    # Keep all devices colored even if split column is missing for a subset.
-    all_devices = sorted(df["device_id"].dropna().astype(str).unique().tolist())
-    fallback_cycle = _make_shades("#A9D6FF", "#0B4FA8", max(1, len(all_devices)))
-    for idx, device_id in enumerate(all_devices):
-        if device_id not in color_map:
-            color_map[device_id] = fallback_cycle[idx % len(fallback_cycle)]
-
-    return color_map
+    return out, color_map, color_col
 
 
 def _save_plot(
@@ -153,13 +150,16 @@ def _save_plot(
     title: str,
     output_path: Path,
     color_map: dict[str, str],
+    color_col: str = "device_id",
+    color_label: str = "Device",
+    group_col: str = "device_id",
 ) -> None:
     p = (
-        ggplot(df, aes(x="timestamp", y=y_col, color="device_id"))
+        ggplot(df, aes(x="timestamp", y=y_col, color=color_col, group=group_col))
         + geom_line(size=0.6, alpha=0.9)
         + scale_color_manual(values=color_map)
         + theme_bw()
-        + labs(title=title, x="Time", y=y_label, color="Device")
+        + labs(title=title, x="Time", y=y_label, color=color_label)
     )
     p.save(filename=str(output_path), width=12, height=7, dpi=180, verbose=False)
 
@@ -170,26 +170,37 @@ def _save_heatmap(
     label: str,
     title: str,
     output_path: Path,
+    facet_col: str | None = None,
 ) -> None:
+    group_cols = ["device_id", "line", "position"]
+    if facet_col is not None:
+        group_cols.append(facet_col)
+
     means = (
-        df.groupby(["device_id", "line", "position"], as_index=False)[value_col]
+        df.groupby(group_cols, as_index=False)[value_col]
         .mean()
         .rename(columns={value_col: "mean_value"})
     )
     means["label"] = means["device_id"] + "\n" + means["mean_value"].round(2).astype(str)
     means["line"] = means["line"].astype(int)
     means["position"] = means["position"].astype(int)
+    line_breaks = sorted(means["line"].unique().tolist())
+    position_breaks = sorted(means["position"].unique().tolist())
 
     p = (
         ggplot(means, aes(x="position", y="line", fill="mean_value"))
         + geom_tile(color="white", size=1)
         + geom_text(aes(label="label"), size=8, color="black")
         + scale_fill_gradient(low="#d0e8f5", high="#08306b", name=label)
+        + scale_x_continuous(breaks=position_breaks, minor_breaks=[])
+        + scale_y_continuous(breaks=line_breaks, minor_breaks=[])
         + coord_equal()
         + theme_bw()
         + theme(figure_size=(6, 4))
         + labs(title=title, x="Position", y="Line")
     )
+    if facet_col is not None and facet_col in means.columns:
+        p = p + facet_wrap(f"~{facet_col}") + theme(figure_size=(11, 4.5))
     p.save(filename=str(output_path), dpi=180, verbose=False)
 
 
@@ -198,7 +209,7 @@ def run(input_path: Path, output_dir: Path) -> None:
         raise FileNotFoundError(f"Processed input file not found: {input_path}")
 
     df = pd.read_csv(input_path)
-    required = {"timestamp", "device_id", "temp_c", "humidity_rh", "line", "position"}
+    required = {"timestamp", "device_id", "temp_c", "humidity_rh", "line", "position", "epoch"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"Processed input missing columns: {sorted(missing)}")
@@ -207,8 +218,10 @@ def run(input_path: Path, output_dir: Path) -> None:
     df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
     df = df.dropna(subset=["timestamp", "temp_c", "humidity_rh"])
     color_map = _build_device_color_map(df)
-    line_split_map = _build_blue_red_split_map(df, "line")
-    position_split_map = _build_blue_red_split_map(df, "position")
+    line_split_df, line_split_map, line_split_col = _build_group_split_colors(df, "line", "Line")
+    position_split_df, position_split_map, position_split_col = _build_group_split_colors(
+        df, "position", "Position"
+    )
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -231,55 +244,65 @@ def run(input_path: Path, output_dir: Path) -> None:
     )
 
     _save_plot(
-        df,
+        line_split_df,
         y_col="temp_c",
         y_label="Temperature (deg C)",
         title="Temperature Over Time by Device (Blue/Red Split by Line)",
         output_path=output_dir / "temperature_by_line_split.png",
         color_map=line_split_map,
+        color_col=line_split_col,
+        color_label="Line",
     )
 
     _save_plot(
-        df,
+        line_split_df,
         y_col="humidity_rh",
         y_label="Relative Humidity (%RH)",
         title="Humidity Over Time by Device (Blue/Red Split by Line)",
         output_path=output_dir / "humidity_by_line_split.png",
         color_map=line_split_map,
+        color_col=line_split_col,
+        color_label="Line",
     )
 
     _save_plot(
-        df,
+        position_split_df,
         y_col="temp_c",
         y_label="Temperature (deg C)",
         title="Temperature Over Time by Device (Blue/Red Split by Position)",
         output_path=output_dir / "temperature_by_position_split.png",
         color_map=position_split_map,
+        color_col=position_split_col,
+        color_label="Position",
     )
 
     _save_plot(
-        df,
+        position_split_df,
         y_col="humidity_rh",
         y_label="Relative Humidity (%RH)",
         title="Humidity Over Time by Device (Blue/Red Split by Position)",
         output_path=output_dir / "humidity_by_position_split.png",
         color_map=position_split_map,
+        color_col=position_split_col,
+        color_label="Position",
     )
 
     _save_heatmap(
         df,
         value_col="temp_c",
         label="Mean temp (deg C)",
-        title="Mean Temperature by Layout Position",
+        title="Mean Temperature by Layout Position and Epoch",
         output_path=output_dir / "temperature_heatmap.png",
+        facet_col="epoch",
     )
 
     _save_heatmap(
         df,
         value_col="humidity_rh",
         label="Mean humidity (%RH)",
-        title="Mean Humidity by Layout Position",
+        title="Mean Humidity by Layout Position and Epoch",
         output_path=output_dir / "humidity_heatmap.png",
+        facet_col="epoch",
     )
 
 

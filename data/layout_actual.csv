@@ -1,8 +1,15 @@
 device_id,device_type,line,position,valid_from,valid_to
-Meter 4B 1,standard,1,2,2026-07-01 00:00:00,
-Meter 2,standard,1,1,2026-07-01 00:00:00,
-Outdoor Meter 1,ip65,2,2,2026-07-01 00:00:00,
-Meter 3,standard,2,3,2026-07-01 00:00:00,
-Meter 4,standard,1,4,2026-07-01 00:00:00,
-Outdoor Meter 2,ip65,1,3,2026-07-01 00:00:00,
-Outdoor Meter 3,ip65,2,4,2026-07-01 00:00:00,
+Meter 4B 1,standard,1,2,2026-07-01 00:00:00,2026-07-11 17:01:59
+Meter 2,standard,1,1,2026-07-01 00:00:00,2026-07-11 17:01:59
+Outdoor Meter 1,ip65,2,2,2026-07-01 00:00:00,2026-07-11 17:01:59
+Meter 3,standard,2,3,2026-07-01 00:00:00,2026-07-11 17:01:59
+Meter 4,standard,1,4,2026-07-01 00:00:00,2026-07-11 17:01:59
+Outdoor Meter 2,ip65,1,3,2026-07-01 00:00:00,2026-07-11 17:01:59
+Outdoor Meter 3,ip65,2,4,2026-07-01 00:00:00,2026-07-11 17:01:59
+Outdoor Meter 1,ip65,1,1,2026-07-11 17:02:00,
+Meter 3,standard,1,3,2026-07-11 17:02:00,
+Outdoor Meter 3,ip65,1,4,2026-07-11 17:02:00,
+Outdoor Meter 2,ip65,2,1,2026-07-11 17:02:00,
+Meter 2,standard,2,2,2026-07-11 17:02:00,
+Meter 4,standard,2,3,2026-07-11 17:02:00,
+Meter 4B 1,standard,2,4,2026-07-11 17:02:00,

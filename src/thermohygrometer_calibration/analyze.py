@@ -99,6 +99,18 @@ def join_layout(df: pd.DataFrame, layout: pd.DataFrame) -> pd.DataFrame:
     in_range = merged["timestamp"] >= merged["valid_from"]
     not_expired = merged["valid_to"].isna() | (merged["timestamp"] <= merged["valid_to"])
     matched = merged[in_range & not_expired].copy()
+
+    # Create stable epoch labels from layout validity windows.
+    epoch_windows = (
+        layout[["valid_from", "valid_to"]]
+        .drop_duplicates()
+        .sort_values("valid_from")
+        .reset_index(drop=True)
+    )
+    epoch_windows["epoch"] = [f"Epoch {idx + 1}" for idx in range(len(epoch_windows))]
+    matched = matched.merge(epoch_windows, on=["valid_from", "valid_to"], how="left")
+    matched["epoch"] = matched["epoch"].fillna("Outside layout windows")
+
     matched = matched.drop(columns=["valid_from", "valid_to"])
     matched_ids = set(matched["device_id"].unique())
     unmatched = sorted(set(df["device_id"].unique()) - matched_ids)
