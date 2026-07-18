@@ -1,5 +1,5 @@
 ---
-title: "SwitchBot Thermo-Hygrometer Calibration"
+title: "SwitchBot Thermo-Hygrometer Cross-Calibration"
 date: 2026-07-04
 format:
   html:
@@ -10,6 +10,16 @@ execute:
   warning: false
   message: false
 ---
+
+Consumer IoT devices to measure and record temperature and humidity have become quite cheap recently.
+So I bought 7 of them.
+
+They are all from SwitchBot, 4 of them are their standard "Meter" product [~£5 each] (one of which I bought 6.5 years prior for £25!), and the other three are their IP65 rated meters [~£10 each].
+
+I plan to spread them out throughout my flat to measure the heat transfer.
+However, it's also a good opportunity to check how consisten the measurements are between them.
+
+So for this experiment, I placed all 7 sensors in the same location, and will check how different or consistent each sensor is compared to the rest.
 
 # Simulated
 
@@ -46,3 +56,157 @@ execute:
 ## Mean Humidity Heatmap
 
 ![](results/actual/figures/humidity_heatmap.png)
+
+
+![](results/actual/figures/device_summary_temp_humidity_90ci.png)
+The original sensor is a bit of on outlier for humidity, however these sensors are known to drift over time, with the [SHT3x datasheet](https://sensirion.com/media/documents/213E6A3B/63A5A569/Datasheet_SHT3x_DIS.pdf) quoting a long term dift of <0.25 %RH/yr.
+Over 6.5 years this translates to <1.625 %RH, which would bring the sensor within the range of the others.
+
+
+Visualising the individual measurements of temperature and humidity per device, we can see a negative relationship between RH and temperature.
+Under approximately constant moisture content (constant dew point), this follows from Clausius-Clapeyron because saturation vapour pressure increases with temperature.
+$$
+\mathrm{RH}(T\,|\,T_d) = 100\times\frac{e_s(T_d)}{e_s(T)},\qquad
+e_s(T) \approx 6.112\,\exp\!\left(\frac{17.67\,T}{T+243.5}\right)\;\text{hPa}
+$$
+So each curve on the plot is an iso-dew-point contour, rather than a single global line.
+![](results/actual/figures/temp_vs_humidity_by_sensor.png)
+
+On this plot it's also visible that the IP65 type sensors more often jump by 0.2 degrees compared to the standard meters.
+
+![](results/actual/figures/adjacent_step_frequency_wilson95.png)
+
+
+# Bayesian BSTS Model
+
+To quantify device effects while accounting for strong temporal autocorrelation,
+we fit a PyMC Bayesian structural time-series (BSTS) model with a continuous local-level trend.
+Placement effects (line and position) are currently disabled by default for the single-epoch data,
+because they are confounded with device when each meter occupies one fixed location.
+
+The model is fit separately for `temp_c` and `humidity_rh` using the processed long data.
+
+## Observation model
+
+For observation $n$ at time index $t[n]$:
+
+$$
+y_n \sim \mathcal{N}(\mu_n, \sigma_{obs})
+$$
+
+$$
+\mu_n = \alpha
++ b_{d[n]}
++ \beta^{(epoch)}_{e[n]}
++ \ell_{t[n]}
+$$
+
+When placement effects are explicitly enabled for crossover data, the mean expands to
+
+$$
+\mu_n = \alpha
++ b_{d[n]}
++ \beta^{(line)}_{\ell[n]}
++ \beta^{(position)}_{p[n]}
++ \beta^{(epoch)}_{e[n]}
++ \ell_{t[n]}
+$$
+
+where:
+
+- $b_{d[n]}$ is the per-device effect (hierarchical random effect)
+- $\beta^{(line)}_{\ell[n]}$ is the optional line effect
+- $\beta^{(position)}_{p[n]}$ is the optional position effect
+- $\beta^{(epoch)}_{e[n]}$ is the epoch effect, included only when multiple epochs are present
+- $\ell_{t[n]}$ is a shared latent local-level drift over time
+
+## Hierarchical and structural components
+
+### Device effect (hierarchical)
+
+$$
+\sigma_{device} \sim \text{HalfNormal}(0.5)
+$$
+
+$$
+b_d = u_d - \bar u, \quad u_d \sim \mathcal{N}(0, \sigma_{device})
+$$
+
+This is a centered hierarchical parameterization with a sum-to-zero constraint across devices.
+The centering removes the free common-mode shift between the intercept and all device effects,
+so $\alpha$ is the grand mean and device effects are interpretable as relative offsets.
+
+### Line, position, and epoch effects
+
+When placement effects are enabled, raw line and position effects are sampled as standard
+normals and then centered to sum to zero:
+
+$$
+\tilde\beta^{(line)}_\ell \sim \mathcal{N}(0,1), \quad
+\beta^{(line)}_\ell = \tilde\beta^{(line)}_\ell - \frac{1}{L}\sum_{\ell'}\tilde\beta^{(line)}_{\ell'}
+$$
+
+and similarly for position effects.
+
+For the special case of two lines, the implementation uses a single symmetric contrast
+$\delta_{line}$ and sets the two line effects to $+\delta_{line}$ and $-\delta_{line}$.
+
+Epoch effects, when multiple epochs are present, are sampled as standard normals and centered
+to sum to zero in the same way.
+
+Centering avoids confounding with the intercept and makes effects interpretable as deviations
+from the global mean.
+
+### Local-level drift (BSTS trend)
+
+We use a Gaussian random walk over the global 1-minute time index, with no epoch resets:
+
+$$
+\sigma_{level} \sim \text{HalfNormal}(0.05)
+$$
+
+$$
+\ell^{raw}_t \sim \text{GaussianRandomWalk}(\sigma_{level}), \qquad
+\ell_t = \ell^{raw}_t - \frac{1}{T}\sum_{k=1}^{T}\ell^{raw}_k
+$$
+
+In the implementation, the random walk is anchored with an initial distribution
+$\ell^{raw}_1 \sim \mathcal{N}(0,5)$. The mean-centering step removes intercept-trend
+confounding by forcing the average latent level over the window to zero.
+
+At 1-minute resolution, a daily random-walk standard deviation is approximately
+$\sqrt{1440}\,\sigma_{level}$. With the current prior scale, this is about
+$\sqrt{1440} \times 0.05 \approx 1.9\,^\circ\text{C}$.
+
+## Priors
+
+| Parameter | Prior | Reasoning |
+|---|---|---|
+| $\alpha$ (intercept) | $\mathcal{N}(\bar{y},\, 5)$ | Centred on empirical mean; $\pm 5\,^\circ\text{C}$ covers plausible temperature range |
+| $\sigma_{obs}$ | $\text{HalfNormal}(0.2)$ | Tighter measurement-noise prior to reduce tradeoff with latent trend variance |
+| $\sigma_{device}$ | $\text{HalfNormal}(0.5)$ | Allows moderate between-device offsets while regularizing toward small calibration differences |
+| device offsets $u_d$ | $\mathcal{N}(0, \sigma_{device})$ | Centered hierarchically and then sum-centered to form identifiable relative device effects |
+| raw line effects | $\mathcal{N}(0,1)$, centered | Only when placement effects are enabled; for two lines the implementation reduces this to one symmetric contrast |
+| raw position effects | $\mathcal{N}(0,1)$, centered | Only when placement effects are enabled |
+| raw epoch effects | $\mathcal{N}(0,1)$, centered | Only included when multiple epochs are present |
+| $\sigma_{level}$ | $\text{HalfNormal}(0.05)$ | Per-minute innovation scale; implies about 1.9°C day-scale random-walk SD |
+
+# Prior predictive checks
+
+![](results/actual/model/temp_c_prior_predictive.png)
+
+
+# Fitted model
+
+The model seems well converged with Rhat close to 1:
+```{python}
+#| echo: false
+#| warning: false
+import pandas as pd
+
+df = pd.read_csv("results/actual/model/temp_c_summary.csv")
+df.iloc[0:11,:]
+```
+
+The device offsets range from -0.11 to +0.13 #TODO
+![](results/actual/model/temp_c_device_effect_forest.png)
